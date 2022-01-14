@@ -2,10 +2,13 @@ package svcimpls
 
 import (
 	"bytes"
+	"fmt"
+	"io"
+	"strconv"
+
 	"github.com/couchbaselabs/gocaves/contrib/pathparse"
 	"github.com/couchbaselabs/gocaves/mock"
 	"github.com/couchbaselabs/gocaves/mock/mockauth"
-	"io"
 )
 
 func (x *mgmtImpl) handleGetPoolConfig(source mock.MgmtService, req *mock.HTTPRequest) *mock.HTTPResponse {
@@ -159,6 +162,62 @@ func (x *mgmtImpl) handleGetAllBucketConfigs(source mock.MgmtService, req *mock.
 	return &mock.HTTPResponse{
 		StatusCode: 200,
 		Body:       bytes.NewReader(configArr),
+	}
+}
+
+func (x *mgmtImpl) handleAddBucketConfig(source mock.MgmtService, req *mock.HTTPRequest) *mock.HTTPResponse {
+	fmt.Println("xxx")
+
+	bucketType := req.Form.Get("bucketType")
+	flushEnabled := req.Form.Get("flushEnabled")
+	name := req.Form.Get("name")
+	ramQuotaMB := req.Form.Get("ramQuotaMB")
+	replicaIndex := req.Form.Get("replicaIndex")
+	replicaNumberStr := req.Form.Get("replicaNumber")
+
+	var replicaNumber int
+	if replicaNumberStr != "" {
+		var err error
+		replicaNumber, err = strconv.Atoi(replicaNumberStr)
+		if err != nil {
+			return &mock.HTTPResponse{
+				StatusCode: 400,
+				Body:       bytes.NewReader([]byte(`{"errors":{"replicaNumber":"The value must be an integer"}`)),
+			}
+		}
+	}
+
+	_ = flushEnabled
+	_ = ramQuotaMB
+	_ = replicaIndex
+
+	_, err := source.Node().Cluster().AddBucket(mock.NewBucketOptions{
+		Name:        name,
+		Type:        mock.BucketTypeFromString(bucketType),
+		NumReplicas: uint(replicaNumber),
+	})
+	if err != nil {
+		return &mock.HTTPResponse{
+			StatusCode: 400,
+			Body:       bytes.NewReader([]byte(`{"errors":{"": ""}`)),
+		}
+	}
+
+	return &mock.HTTPResponse{
+		StatusCode: 202,
+		Body:       bytes.NewReader([]byte(`{"":""}`)),
+	}
+}
+
+func (x *mgmtImpl) handleBucketFlush(source mock.MgmtService, req *mock.HTTPRequest) *mock.HTTPResponse {
+	pathParts := pathparse.ParseParts(req.URL.Path, "/pools/default/buckets/*/controller/doFlush")
+	bucketName := pathParts[0]
+
+	bucket := source.Node().Cluster().GetBucket(bucketName)
+	bucket.Flush()
+	return &mock.HTTPResponse{
+		StatusCode: 200,
+		Body:       bytes.NewReader([]byte(`{"":""}`)),
 	}
 }
 

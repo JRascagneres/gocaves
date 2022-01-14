@@ -1,8 +1,9 @@
 package mockimpl
 
 import (
-	"github.com/couchbaselabs/gocaves/mock/mockmr"
 	"log"
+
+	"github.com/couchbaselabs/gocaves/mock/mockmr"
 
 	"github.com/couchbaselabs/gocaves/mock"
 	"github.com/couchbaselabs/gocaves/mock/mockdb"
@@ -69,7 +70,7 @@ func newBucket(parent *clusterInst, opts mock.NewBucketOptions) (*bucketInst, er
 	// Initially set up the vbucket map with nothing in it.
 	bucket.UpdateVbMap(nil)
 
-	log.Printf("new bucket created")
+	log.Printf("new bucket created: " + bucket.Name())
 	return bucket, nil
 }
 
@@ -193,4 +194,8 @@ func (b *bucketInst) VbucketOwnership(node mock.ClusterNode) []int {
 
 func (b *bucketInst) ViewIndexManager() mock.ViewIndexManager {
 	return b.viewEngine
+}
+
+func (b *bucketInst) Flush() {
+	// TODO: Actually flush
 }
