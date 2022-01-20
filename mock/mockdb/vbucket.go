@@ -492,3 +492,7 @@ func (s *Vbucket) rollback(snap *vbucketSnapshot) error {
 
 	return nil
 }
+
+func (s *Vbucket) GetHighSeqNo() uint64 {
+	return s.maxSeqNo
+}

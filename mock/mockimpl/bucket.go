@@ -198,4 +198,5 @@ func (b *bucketInst) ViewIndexManager() mock.ViewIndexManager {
 
 func (b *bucketInst) Flush() {
 	// TODO: Actually flush
+
 }
