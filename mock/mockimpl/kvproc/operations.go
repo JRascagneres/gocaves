@@ -838,7 +838,7 @@ func (e *Engine) MultiLookup(opts MultiLookupOptions) (*MultiLookupResult, error
 		return nil, ErrLocked
 	}
 
-	sdRes, err := e.executeSdOps(doc, doc, opts.Ops)
+	sdRes, err := e.executeSdOps(doc, doc, opts.Ops, true)
 	if err != nil {
 		return nil, err
 	}
@@ -965,7 +965,7 @@ func (e *Engine) MultiMutate(opts MultiMutateOptions) (*MultiMutateResult, error
 			Cas: mockdb.GenerateNewCas(e.HLC()),
 		}
 
-		sdRes, err := e.executeSdOps(doc, newMetaDoc, opts.Ops)
+		sdRes, err := e.executeSdOps(doc, newMetaDoc, opts.Ops, false)
 		if err != nil {
 			return nil, err
 		}

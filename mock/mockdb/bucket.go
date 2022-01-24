@@ -156,6 +156,12 @@ func (b *Bucket) GetVbucket(vbIdx uint) *Vbucket {
 	return b.vbuckets[vbIdx]
 }
 
+func (b *Bucket) ForEachVBucket(callback func(vbIdx int, vbucket *Vbucket)) {
+	for vbIdx, vbucket := range b.vbuckets {
+		callback(vbIdx, vbucket)
+	}
+}
+
 // Compact will compact all of the vbuckets within this bucket.  This is not
 // yet supported.  See Vbucket::Compact for details on why.
 func (b *Bucket) Compact() error {
@@ -192,4 +198,10 @@ func (b *Bucket) Rollback(snap *BucketSnapshot) error {
 	}
 
 	return nil
+}
+
+func (b *Bucket) Flush() {
+	for _, vbucket := range b.vbuckets {
+		vbucket.Flush()
+	}
 }

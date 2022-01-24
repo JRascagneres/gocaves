@@ -49,7 +49,7 @@ func subdocReorder(ops []*SubDocOp) *subdocOpList {
 	}
 }
 
-func (e *Engine) executeSdOps(doc, newMeta *mockdb.Document, ops []*SubDocOp) ([]*SubDocResult, error) {
+func (e *Engine) executeSdOps(doc, newMeta *mockdb.Document, ops []*SubDocOp, continueOnOpError bool) ([]*SubDocResult, error) {
 	if len(ops) > subdocMultiMaxPaths {
 		return nil, ErrSdBadCombo
 	}
@@ -174,6 +174,11 @@ func (e *Engine) executeSdOps(doc, newMeta *mockdb.Document, ops []*SubDocOp) ([
 		if err != nil {
 			return nil, err
 		}
+
+		if !continueOnOpError && opRes.Err != nil {
+			return nil, SubdocMutateError{opRes.Err}
+		}
+
 		if opRes == nil {
 			return nil, ErrInternal
 		}

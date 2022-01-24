@@ -493,6 +493,18 @@ func (s *Vbucket) rollback(snap *vbucketSnapshot) error {
 	return nil
 }
 
+// TODO: Actually flush
+func (s *Vbucket) Flush() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.documents = make([]*Document, 0)
+	s.maxSeqNo = 0
+}
+
 func (s *Vbucket) GetHighSeqNo() uint64 {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	return s.maxSeqNo
 }
