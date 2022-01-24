@@ -3,6 +3,7 @@ package svcimpls
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -12,6 +13,7 @@ import (
 	"github.com/couchbase/gocbcore/v9/memd"
 	"github.com/couchbaselabs/gocaves/mock"
 	"github.com/couchbaselabs/gocaves/mock/mockauth"
+	"github.com/couchbaselabs/gocaves/mock/mockdb"
 	"github.com/couchbaselabs/gocaves/mock/mockimpl/kvproc"
 )
 
@@ -156,6 +158,9 @@ func (x *kvImplCrud) handleGetRequest(source mock.KvClient, pak *memd.Packet, st
 			x.writeProcErr(source, pak, err, start)
 			return
 		}
+
+		fmt.Println(string(pak.Key))
+		fmt.Println(string(resp.Value))
 
 		extrasBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(extrasBuf[0:], resp.Flags)
@@ -338,6 +343,9 @@ func (x *kvImplCrud) handleAddRequest(source mock.KvClient, pak *memd.Packet, st
 }
 
 func (x *kvImplCrud) handleSetRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
+	fmt.Println(string(pak.Key))
+	fmt.Println(string(pak.Value))
+
 	if proc := x.makeProc(source, pak, mockauth.PermissionDataWrite, start); proc != nil {
 		if len(pak.Extras) != 8 {
 			x.writeStatusReply(source, pak, memd.StatusInvalidArgs, start)
@@ -886,7 +894,21 @@ func (x *kvImplCrud) handleMultiLookupRequest(source mock.KvClient, pak *memd.Pa
 }
 
 func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
+	fmt.Println(string(pak.Key))
+
 	if proc := x.makeProc(source, pak, mockauth.PermissionDataWrite, start); proc != nil {
+
+		if bytes.Equal(pak.Key, []byte("_sync:user:alice")) {
+			fmt.Println("x")
+			resp, _ := proc.Get(kvproc.GetOptions{
+				Vbucket:      uint(pak.Vbucket),
+				CollectionID: uint(pak.CollectionID),
+				Key:          pak.Key,
+			})
+			fmt.Println(string(resp.Value))
+			fmt.Println("x")
+		}
+
 		var docFlags memd.SubdocDocFlag
 		var expiry uint32
 		if len(pak.Extras) > 0 {
@@ -934,6 +956,10 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 					IsXattrPath:  opFlags&memd.SubdocFlagXattrPath != 0,
 					ExpandMacros: opFlags&memd.SubdocFlagExpandMacros != 0,
 				})
+
+				fmt.Println(opCode)
+				fmt.Println(path)
+				fmt.Println(string(value))
 
 				byteIdx += 8 + pathLen + valueLen - 1
 
@@ -1041,6 +1067,10 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 			Cas:             pak.Cas,
 		})
 		if err != nil {
+			if e, ok := err.(kvproc.SubdocMutateError); ok {
+				x.writeSubdocMutateErr(source, pak, start, 0, e.Err)
+				return
+			}
 			x.writeProcErr(source, pak, err, start)
 			return
 		}
@@ -1053,21 +1083,7 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 		}
 
 		if failedOpIdx >= 0 {
-			resStatus := x.translateProcErr(resp.Ops[failedOpIdx].Err)
-
-			valueBytes := make([]byte, 3)
-			valueBytes[0] = uint8(failedOpIdx)
-			binary.BigEndian.PutUint16(valueBytes[1:], uint16(resStatus))
-
-			// TODO(brett19): Confirm that sub-document errors return 0 CAS.
-			writePacketToSource(source, &memd.Packet{
-				Magic:   memd.CmdMagicRes,
-				Command: pak.Command,
-				Opaque:  pak.Opaque,
-				Status:  memd.StatusSubDocBadMulti,
-				Cas:     0,
-				Value:   valueBytes,
-			}, start)
+			x.writeSubdocMutateErr(source, pak, start, failedOpIdx, resp.Ops[failedOpIdx].Err)
 			return
 		}
 
@@ -1105,6 +1121,23 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 			Extras:  extrasBuf,
 		}, start)
 	}
+}
+
+func (x *kvImplCrud) writeSubdocMutateErr(source mock.KvClient, pak *memd.Packet, start time.Time, errIdx int, err error) {
+	resStatus := x.translateProcErr(err)
+
+	valueBytes := make([]byte, 3)
+	valueBytes[0] = uint8(0)
+	binary.BigEndian.PutUint16(valueBytes[1:], uint16(resStatus))
+
+	writePacketToSource(source, &memd.Packet{
+		Magic:   memd.CmdMagicRes,
+		Command: pak.Command,
+		Opaque:  pak.Opaque,
+		Status:  memd.StatusSubDocBadMulti,
+		Cas:     0,
+		Value:   valueBytes,
+	}, start)
 }
 
 func (x *kvImplCrud) handleObserveSeqNo(source mock.KvClient, pak *memd.Packet, start time.Time) {
@@ -1157,7 +1190,7 @@ func (x *kvImplCrud) handleStatsRequest(source mock.KvClient, pak *memd.Packet, 
 				Value:   []byte(source.SelectedBucket().ID()),
 			}, start)
 		} else {
-			stats, err := x.getStats(string(pak.Key))
+			stats, err := x.getStats(source.SelectedBucket(), string(pak.Key))
 			if err != nil {
 				x.writeProcErr(source, pak, err, start)
 				return
@@ -1185,7 +1218,7 @@ func (x *kvImplCrud) handleStatsRequest(source mock.KvClient, pak *memd.Packet, 
 	}
 }
 
-func (x *kvImplCrud) getStats(key string) (map[string]string, error) {
+func (x *kvImplCrud) getStats(bucket mock.Bucket, key string) (map[string]string, error) {
 	if key == "" {
 		return x.defaultStats(), nil
 	} else if key == "memory" {
@@ -1203,6 +1236,14 @@ func (x *kvImplCrud) getStats(key string) (map[string]string, error) {
 		return map[string]string{
 			"ep_dcp_conn_buffer_size": "10485760",
 		}, nil
+	} else if key == "vbucket-seqno" {
+		stats := make(map[string]string)
+		bucket.Store().ForEachVBucket(func(vbIdx int, vbucket *mockdb.Vbucket) {
+			stats[fmt.Sprintf("vb_%d:high_seqno", vbIdx)] = strconv.FormatUint(vbucket.GetHighSeqNo(), 10)
+			stats[fmt.Sprintf("vb_%d:abs_high_seqno", vbIdx)] = strconv.FormatUint(vbucket.GetHighSeqNo(), 10)
+			stats[fmt.Sprintf("vb_%d:uuid", vbIdx)] = strconv.FormatUint(vbucket.CurrentMetaState(0).VbUUID, 10)
+		})
+		return stats, nil
 	}
 
 	return nil, kvproc.ErrDocNotFound

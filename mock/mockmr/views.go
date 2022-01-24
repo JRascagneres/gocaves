@@ -3,10 +3,11 @@ package mockmr
 import (
 	"encoding/json"
 	"errors"
-	"github.com/couchbaselabs/gocaves/mock/mockdb"
-	"github.com/dop251/goja"
 	"sort"
 	"sync"
+
+	"github.com/couchbaselabs/gocaves/mock/mockdb"
+	"github.com/dop251/goja"
 )
 
 // Index represents a single map reduce query.
@@ -236,7 +237,7 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 	}
 
 	output = output[opts.Skip:]
-	if opts.Limit > 0 {
+	if opts.Limit > 0 && output != nil {
 		output = output[:opts.Limit]
 	}
 
