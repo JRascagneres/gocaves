@@ -866,6 +866,7 @@ func (x *kvImplCrud) handleMultiLookupRequest(source mock.KvClient, pak *memd.Pa
 		}
 
 		valueBytes := make([]byte, 0)
+		anOperationFailed := false
 		for _, opRes := range resp.Ops {
 			opBytes := make([]byte, 6)
 			resStatus := x.translateProcErr(opRes.Err)
@@ -875,11 +876,25 @@ func (x *kvImplCrud) handleMultiLookupRequest(source mock.KvClient, pak *memd.Pa
 			opBytes = append(opBytes, opRes.Value...)
 
 			valueBytes = append(valueBytes, opBytes...)
+
+			if opRes.Err != nil {
+				anOperationFailed = true
+			}
 		}
+
+		fmt.Println("HEY")
+		fmt.Println(string(valueBytes))
 
 		status := memd.StatusSuccess
 		if resp.IsDeleted {
 			status = memd.StatusSubDocSuccessDeleted
+			if anOperationFailed {
+				status = memd.StatusSubDocMultiPathFailureDeleted
+			}
+		} else {
+			if anOperationFailed {
+				status = memd.StatusSubDocBadMulti
+			}
 		}
 
 		writePacketToSource(source, &memd.Packet{

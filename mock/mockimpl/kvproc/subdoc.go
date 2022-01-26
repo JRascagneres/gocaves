@@ -2,6 +2,8 @@ package kvproc
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,9 +80,18 @@ func (e *Engine) executeSdOps(doc, newMeta *mockdb.Document, ops []*SubDocOp, co
 				}
 			}
 
+			// TODO JacquesRas: maybe move this to the executor bit
+			if !strings.HasPrefix(path, "_") && doc.IsDeleted {
+				opReses[reorderedOps.indexes[opIdx]] = &SubDocResult{
+					Value: nil,
+					Err:   ErrSdPathNotFound,
+				}
+				continue
+			}
+
 			opDoc, err = e.createXattrDoc(doc, newMeta, op)
 			if err != nil {
-				opReses[opIdx] = &SubDocResult{
+				opReses[reorderedOps.indexes[opIdx]] = &SubDocResult{
 					Value: nil,
 					Err:   err,
 				}
@@ -268,7 +279,9 @@ func (e *Engine) createXattrDoc(doc, metaDoc *mockdb.Document, op *SubDocOp) (*m
 func (e *Engine) createMacroValue(opValue []byte, doc, metaDoc *mockdb.Document) ([]byte, error) {
 	var val []byte
 	if bytes.Equal(opValue, casMacro) {
-		val = []byte(fmt.Sprintf("\"0x%016x\"", metaDoc.Cas))
+		binaryEncodedCas := make([]byte, 8)
+		binary.LittleEndian.PutUint64(binaryEncodedCas, metaDoc.Cas)
+		val = []byte(fmt.Sprintf("\"0x%v\"", hex.EncodeToString(binaryEncodedCas)))
 	} else if bytes.Equal(opValue, crc32cMacro) {
 		table := crc32.MakeTable(crc32.Castagnoli)
 		val = []byte(fmt.Sprintf("\"0x%x\"", crc32.Checksum(doc.Value, table)))
@@ -538,6 +551,12 @@ type SubDocGetDocExecutor struct {
 // Execute performs the subdocument operation.
 func (e SubDocGetDocExecutor) Execute(_ *SubDocOp) (*SubDocResult, error) {
 	// TODO: check what happens with a full doc against an xattr
+	if e.doc.IsDeleted {
+		return &SubDocResult{
+			Value: nil,
+			Err:   ErrSdPathNotFound,
+		}, nil
+	}
 	return &SubDocResult{
 		Value: e.doc.Value,
 		Err:   nil,
