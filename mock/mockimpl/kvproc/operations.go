@@ -899,11 +899,13 @@ func (e *Engine) MultiMutate(opts MultiMutateOptions) (*MultiMutateResult, error
 
 		// We need to dynamically decide what the root of the document
 		// needs to look like based on the operations that exist.
+		xattrUpdateOnly := true
 		for _, op := range opts.Ops {
 			if !op.IsXattrPath {
 				if opts.CreateAsDeleted {
 					return nil, ErrInvalidArgument
 				}
+				xattrUpdateOnly = false
 				trimmedPath := strings.TrimSpace(op.Path)
 				if trimmedPath == "" {
 					switch op.Op {
@@ -933,7 +935,7 @@ func (e *Engine) MultiMutate(opts MultiMutateOptions) (*MultiMutateResult, error
 
 		// Check for cas mismatch before we do any work. We'll effectively be doing this check again during the update
 		// too so if anyone performs a mutation during that time then we'll catch it there too.
-		if opts.Cas != 0 && doc.Cas != opts.Cas {
+		if opts.Cas != 0 && doc.Cas != opts.Cas && !(doc.IsDeleted && !xattrUpdateOnly) {
 			return nil, ErrCasMismatch
 		}
 
@@ -946,6 +948,7 @@ func (e *Engine) MultiMutate(opts MultiMutateOptions) (*MultiMutateResult, error
 				doc = mdoc
 			} else if doc.IsDeleted && !opts.AccessDeleted {
 				doc.IsDeleted = false
+				doc.Expiry = time.Time{}
 			}
 		}
 
