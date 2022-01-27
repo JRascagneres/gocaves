@@ -276,6 +276,11 @@ func (e *Engine) createXattrDoc(doc, metaDoc *mockdb.Document, op *SubDocOp) (*m
 	}, nil
 }
 
+const (
+	// CRC-32 checksum represents the body hash of "Deleted" document.
+	DeleteCrc32c = "0x00000000"
+)
+
 func (e *Engine) createMacroValue(opValue []byte, doc, metaDoc *mockdb.Document) ([]byte, error) {
 	var val []byte
 	if bytes.Equal(opValue, casMacro) {
@@ -283,8 +288,13 @@ func (e *Engine) createMacroValue(opValue []byte, doc, metaDoc *mockdb.Document)
 		binary.LittleEndian.PutUint64(binaryEncodedCas, metaDoc.Cas)
 		val = []byte(fmt.Sprintf("\"0x%v\"", hex.EncodeToString(binaryEncodedCas)))
 	} else if bytes.Equal(opValue, crc32cMacro) {
-		table := crc32.MakeTable(crc32.Castagnoli)
-		val = []byte(fmt.Sprintf("\"0x%x\"", crc32.Checksum(doc.Value, table)))
+		//TODO: Problem... This is before the delete is processed....
+		if doc.IsDeleted {
+			val = []byte(fmt.Sprintf("\"%s\"", DeleteCrc32c))
+		} else {
+			table := crc32.MakeTable(crc32.Castagnoli)
+			val = []byte(fmt.Sprintf("\"0x%x\"", crc32.Checksum(doc.Value, table)))
+		}
 	} else if bytes.Equal(opValue, seqnoMacro) {
 		return nil, ErrUnknownXattrMacro
 	} else if bytes.HasPrefix(opValue, []byte(`"${$document`)) && bytes.HasSuffix(opValue, []byte(`}"`)) {
