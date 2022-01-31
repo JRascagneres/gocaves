@@ -113,18 +113,49 @@ func sendMutation(source mock.KvClient, start time.Time, opaque uint32, doc *moc
 	binary.BigEndian.PutUint32(mutationExtrasBuf[24:], 0) // lock time
 	// Metadata?
 
+	dataType := doc.Datatype
+	var value []byte
+
+	if len(doc.Xattrs) > 0 {
+		var xattrValues []byte
+		for xattrK, xattrV := range doc.Xattrs {
+			xattrChunk := []byte(xattrK)
+			xattrChunk = append(xattrChunk, byte(0))
+			xattrChunk = append(xattrChunk, xattrV...)
+			xattrChunk = append(xattrChunk, byte(0))
+
+			xattrChunkLen := make([]byte, 4)
+			binary.BigEndian.PutUint32(xattrChunkLen[0:], uint32(len(xattrChunk)))
+			xattrChunk = append(xattrChunkLen, xattrChunk...)
+
+			xattrValues = append(xattrValues, xattrChunk...)
+		}
+
+		xattrsLen := len(xattrValues)
+
+		value = make([]byte, 4)
+		binary.BigEndian.PutUint32(value[0:], uint32(xattrsLen))
+		value = append(value, xattrValues...)
+		value = append(value, doc.Value...)
+
+		dataType = dataType | uint8(memd.DatatypeFlagXattrs)
+	} else {
+		value = doc.Value
+	}
+
 	// Send mutation
 	writePacketToSource(source, &memd.Packet{
 		Magic:    memd.CmdMagicReq,
 		Command:  memd.CmdDcpMutation,
-		Datatype: 0x00,
+		Datatype: dataType,
 		Vbucket:  uint16(doc.VbID),
 		Key:      doc.Key,
-		Value:    doc.Value,
+		Value:    value,
 		Extras:   mutationExtrasBuf,
 		Status:   memd.StatusSuccess,
 		Opaque:   opaque,
 	}, start)
+
 }
 
 func sendEndStream(source mock.KvClient, start time.Time, vbucket uint16, opaque uint32) {

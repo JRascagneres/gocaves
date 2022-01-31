@@ -2,6 +2,7 @@ package svcimpls
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/couchbaselabs/gocaves/mock"
 )
@@ -18,6 +19,12 @@ func GenClusterConfig(c mock.Cluster, reqNode mock.ClusterNode) []byte {
 		nodesConfig = append(nodesConfig, json.RawMessage(nodeConfig))
 	}
 	config["nodes"] = nodesConfig
+
+	config["buckets"] = map[string]interface{}{
+		"uri":                       fmt.Sprint("/pools/default/buckets"),
+		"terseBucketsBase":          "/pools/default/b/",
+		"terseStreamingBucketsBase": "/pools/default/bs/",
+	}
 
 	configBytes, _ := json.Marshal(config)
 	return configBytes

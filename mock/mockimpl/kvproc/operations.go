@@ -1001,6 +1001,7 @@ func (e *Engine) MultiMutate(opts MultiMutateOptions) (*MultiMutateResult, error
 
 				idoc.LockExpiry = newMetaDoc.LockExpiry
 				idoc.Cas = newMetaDoc.Cas
+				idoc.Datatype = uint8(memd.DatatypeFlagJSON)
 				return idoc, nil
 			})
 		if err == ErrCasMismatch {
