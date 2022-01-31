@@ -209,6 +209,14 @@ func (x *mgmtImpl) handleAddBucketConfig(source mock.MgmtService, req *mock.HTTP
 	}
 }
 
+func (x *mgmtImpl) handleGetNodeServices(source mock.MgmtService, req *mock.HTTPRequest) *mock.HTTPResponse {
+	clusterConfig := GenTerseClusterConfig(source.Node().Cluster(), source.Node())
+	return &mock.HTTPResponse{
+		StatusCode: 200,
+		Body:       bytes.NewReader(clusterConfig),
+	}
+}
+
 func (x *mgmtImpl) handleBucketFlush(source mock.MgmtService, req *mock.HTTPRequest) *mock.HTTPResponse {
 	pathParts := pathparse.ParseParts(req.URL.Path, "/pools/default/buckets/*/controller/doFlush")
 	bucketName := pathParts[0]

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/couchbaselabs/gocaves/mock/mockdb"
@@ -118,9 +119,9 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 	}
 
 	if opts.Reduce && view.ReduceFunc == "" {
-		return 0, nil, &InvalidParametersError{
-			Message: "{\"error\":\"query_parse_error\",\"reason\":\"Invalid URL parameter `reduce` for map view.\"}",
-		}
+		// TODO: Double check this. Having this here causes a couple SGW tests to fail when they don't against CBS...
+		//  Only with gocb v1 though. Possible the setting is a bug with that sdk version
+		opts.Reduce = false
 	}
 
 	indexed, err := e.index(view, opts.Data)
@@ -131,6 +132,12 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 	inclusiveStart := true
 	indexSize := len(indexed)
 	var results resultContainer
+
+	opts.StartKey = strings.ReplaceAll(opts.StartKey, "\n", "")
+	opts.EndKey = strings.ReplaceAll(opts.EndKey, "\n", "")
+	opts.StartKeyDocID = strings.ReplaceAll(opts.StartKeyDocID, "\n", "")
+	opts.EndKeyDocID = strings.ReplaceAll(opts.EndKeyDocID, "\n", "")
+	opts.Key = strings.ReplaceAll(opts.Key, "\n", "")
 
 	if opts.Descending {
 		startKey := opts.StartKey
@@ -181,10 +188,10 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 		}
 
 		if opts.InclusiveEnd {
-			if opts.EndKey != "" && doc.Key < opts.EndKey {
+			if opts.EndKey != "" && doc.Key > opts.EndKey {
 				continue
 			}
-			if opts.EndKeyDocID != "" && doc.ID < opts.EndKeyDocID {
+			if opts.EndKeyDocID != "" && doc.ID > opts.EndKeyDocID {
 				continue
 			}
 		} else {
