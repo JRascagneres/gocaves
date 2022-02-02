@@ -63,7 +63,6 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 
 	if rollbackRequired {
 		fmt.Println("Rollback required")
-		fmt.Println(pak.Vbucket)
 	}
 
 	if rollbackRequired {
@@ -91,23 +90,23 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 		}, start)
 	}
 
+	// If the start sequence is not at the end of the previously sent snapshot then the snapshot failed to send
+	// completely. Therefore, we need to re-send this snapshot.
+	if startSeqNo != snapshotEndSeqNo {
+		startSeqNo = snapshotStartSeqNo
+	}
+
 	if startSeqNo != endSeqNo {
 		sendSnapshotMarker(source, start, pak.Vbucket, pak.Opaque, startSeqNo, endSeqNo)
-	}
-
-	if startSeqNo != snapshotEndSeqNo {
-		fmt.Println("xx")
-	}
-
-	for _, doc := range docs {
-		if doc.SeqNo < startSeqNo {
-			break
+		for _, doc := range docs {
+			if doc.SeqNo < startSeqNo {
+				break
+			}
+			if doc.SeqNo > endSeqNo {
+				break
+			}
+			sendMutation(source, start, pak.Opaque, doc)
 		}
-		if doc.SeqNo > endSeqNo {
-			break
-		}
-		sendMutation(source, start, pak.Opaque, doc)
-		fmt.Println(string(doc.Key))
 	}
 
 	sendEndStream(source, start, pak.Vbucket, pak.Opaque)

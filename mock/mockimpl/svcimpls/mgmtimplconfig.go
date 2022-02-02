@@ -2,7 +2,6 @@ package svcimpls
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"strconv"
 
@@ -166,8 +165,6 @@ func (x *mgmtImpl) handleGetAllBucketConfigs(source mock.MgmtService, req *mock.
 }
 
 func (x *mgmtImpl) handleAddBucketConfig(source mock.MgmtService, req *mock.HTTPRequest) *mock.HTTPResponse {
-	fmt.Println("xxx")
-
 	bucketType := req.Form.Get("bucketType")
 	flushEnabled := req.Form.Get("flushEnabled")
 	name := req.Form.Get("name")
