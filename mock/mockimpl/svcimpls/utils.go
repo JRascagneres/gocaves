@@ -1,7 +1,6 @@
 package svcimpls
 
 import (
-	"log"
 	"math/rand"
 	"time"
 
@@ -24,6 +23,6 @@ func writePacketToSource(source mock.KvClient, pak *memd.Packet, start time.Time
 	}
 	err := source.WritePacket(pak)
 	if err != nil {
-		log.Printf("failed to write packet %+v to %+v", pak, source)
+		// log.Printf("failed to write packet %+v to %+v", pak, source)
 	}
 }

@@ -160,7 +160,6 @@ func (x *kvImplCrud) handleGetRequest(source mock.KvClient, pak *memd.Packet, st
 		}
 
 		fmt.Println(string(pak.Key))
-		fmt.Println(string(resp.Value))
 
 		extrasBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(extrasBuf[0:], resp.Flags)
@@ -880,7 +879,6 @@ func (x *kvImplCrud) handleMultiLookupRequest(source mock.KvClient, pak *memd.Pa
 		}
 
 		fmt.Println("HEY")
-		fmt.Println(string(valueBytes))
 
 		status := memd.StatusSuccess
 		if resp.IsDeleted {
@@ -909,18 +907,6 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 	fmt.Println(string(pak.Key))
 
 	if proc := x.makeProc(source, pak, mockauth.PermissionDataWrite, start); proc != nil {
-
-		if bytes.Equal(pak.Key, []byte("_sync:user:alice")) {
-			fmt.Println("x")
-			resp, _ := proc.Get(kvproc.GetOptions{
-				Vbucket:      uint(pak.Vbucket),
-				CollectionID: uint(pak.CollectionID),
-				Key:          pak.Key,
-			})
-			fmt.Println(string(resp.Value))
-			fmt.Println("x")
-		}
-
 		var docFlags memd.SubdocDocFlag
 		var expiry uint32
 		if len(pak.Extras) > 0 {
@@ -971,7 +957,6 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 
 				fmt.Println(opCode)
 				fmt.Println(path)
-				fmt.Println(string(value))
 
 				byteIdx += 8 + pathLen + valueLen - 1
 
