@@ -17,6 +17,7 @@ func (dcp *dcpImpl) Register(h *hookHelper) {
 	h.RegisterKvHandler(memd.CmdDcpOpenConnection, dcp.handleOpenDCPConnection)
 	h.RegisterKvHandler(memd.CmdDcpStreamReq, dcp.handleStreamRequest)
 	h.RegisterKvHandler(memd.CmdDcpControl, dcp.handleDCPControl)
+	h.RegisterKvHandler(memd.CmdDcpGetFailoverLog, dcp.handleFailoverLog)
 }
 
 func (dcp *dcpImpl) handleOpenDCPConnection(source mock.KvClient, pak *memd.Packet, start time.Time) {
@@ -31,16 +32,10 @@ func (dcp *dcpImpl) handleOpenDCPConnection(source mock.KvClient, pak *memd.Pack
 
 func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
 	fmt.Println("DCP Stream Request")
-	writePacketToSource(source, &memd.Packet{
-		Magic:   memd.CmdMagicRes,
-		Command: memd.CmdDcpStreamReq,
-		Opaque:  pak.Opaque,
-		Status:  memd.StatusSuccess,
-	}, start)
-
+	vbucket := source.SelectedBucket().Store().GetVbucket(uint(pak.Vbucket))
 	docs, _, _ := getDocumentFromVBucket(source.SelectedBucket(), uint(pak.Vbucket))
 
-	flags := binary.BigEndian.Uint32(pak.Extras[0:])
+	flags := binary.BigEndian.Uint64(pak.Extras[0:])
 	startSeqNo := binary.BigEndian.Uint64(pak.Extras[8:])
 	endSeqNo := binary.BigEndian.Uint64(pak.Extras[16:])
 	vbUUID := binary.BigEndian.Uint64(pak.Extras[24:])
@@ -48,19 +43,73 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 	snapshotEndSeqNo := binary.BigEndian.Uint64(pak.Extras[40:])
 
 	_ = flags
-	_ = startSeqNo
-	_ = vbUUID
 	_ = snapshotStartSeqNo
 	_ = snapshotEndSeqNo
 
-	sendSnapshotMarker(source, start, pak.Vbucket, pak.Opaque, 0, uint32(endSeqNo))
+	// Decide on whether we should rollback
+	rollbackRequired := false
+	rollbackPoint := uint64(0)
+	if startSeqNo == 0 && vbUUID != 0 {
+		if vbucket.CurrentMetaState(0).VbUUID != vbUUID {
+			rollbackRequired = true
+			rollbackPoint = 0
+		}
+	}
+
+	if vbucket.CurrentMetaState(0).VbUUID != vbUUID && startSeqNo != 0 {
+		rollbackRequired = true
+		rollbackPoint = 0
+	}
+
+	if rollbackRequired {
+		fmt.Println("Rollback required")
+		fmt.Println(pak.Vbucket)
+	}
+
+	if rollbackRequired {
+		streamReqValue := make([]byte, 8)
+		binary.BigEndian.PutUint64(streamReqValue[0:], rollbackPoint)
+		writePacketToSource(source, &memd.Packet{
+			Magic:   memd.CmdMagicRes,
+			Command: memd.CmdDcpStreamReq,
+			Opaque:  pak.Opaque,
+			Status:  memd.StatusRollback,
+			Value:   streamReqValue,
+		}, start)
+		return // Can return as this will trigger another request with updated sequence
+	} else {
+		streamReqValue := make([]byte, 16)
+		// These items are a 'failover log' these should be modified if this is properly implemented
+		binary.BigEndian.PutUint64(streamReqValue[0:], vbucket.CurrentMetaState(0).VbUUID)
+		binary.BigEndian.PutUint64(streamReqValue[8:], 0)
+		writePacketToSource(source, &memd.Packet{
+			Magic:   memd.CmdMagicRes,
+			Command: memd.CmdDcpStreamReq,
+			Opaque:  pak.Opaque,
+			Status:  memd.StatusSuccess,
+			Value:   streamReqValue,
+		}, start)
+	}
+
+	if startSeqNo != endSeqNo {
+		sendSnapshotMarker(source, start, pak.Vbucket, pak.Opaque, startSeqNo, endSeqNo)
+	}
+
+	if startSeqNo != snapshotEndSeqNo {
+		fmt.Println("xx")
+	}
+
 	for _, doc := range docs {
+		if doc.SeqNo < startSeqNo {
+			break
+		}
 		if doc.SeqNo > endSeqNo {
 			break
 		}
 		sendMutation(source, start, pak.Opaque, doc)
 		fmt.Println(string(doc.Key))
 	}
+
 	sendEndStream(source, start, pak.Vbucket, pak.Opaque)
 }
 
@@ -86,11 +135,32 @@ func (dcp *dcpImpl) handleDCPControl(source mock.KvClient, pak *memd.Packet, sta
 	}, start)
 }
 
-func sendSnapshotMarker(source mock.KvClient, start time.Time, vbucket uint16, opaque, startSeqNo, endSeqNo uint32) {
+func (dcp *dcpImpl) handleFailoverLog(source mock.KvClient, pak *memd.Packet, start time.Time) {
+	failoverLog := getFailoverLog(source.SelectedBucket().Store().GetVbucket(uint(pak.Vbucket)))
+	writePacketToSource(source, &memd.Packet{
+		Magic:   memd.CmdMagicRes,
+		Command: memd.CmdDcpGetFailoverLog,
+		Opaque:  pak.Opaque,
+		Status:  memd.StatusSuccess,
+		Value:   failoverLog,
+	}, start)
+
+}
+
+// These items are a 'failover log' these should be modified if this is properly implemented
+
+func getFailoverLog(vbucket *mockdb.Vbucket) []byte {
+	streamReqValue := make([]byte, 16)
+	binary.BigEndian.PutUint64(streamReqValue[0:], vbucket.CurrentMetaState(0).VbUUID)
+	binary.BigEndian.PutUint64(streamReqValue[8:], 0)
+	return streamReqValue
+}
+
+func sendSnapshotMarker(source mock.KvClient, start time.Time, vbucket uint16, opaque uint32, startSeqNo, endSeqNo uint64) {
 	extrasBuf := make([]byte, 20)
-	binary.BigEndian.PutUint32(extrasBuf[0:], 0)  // Start seqno
-	binary.BigEndian.PutUint32(extrasBuf[8:], 0)  // End seqno
-	binary.BigEndian.PutUint32(extrasBuf[16:], 1) // Snapshot type
+	binary.BigEndian.PutUint64(extrasBuf[0:], startSeqNo) // Start seqno
+	binary.BigEndian.PutUint64(extrasBuf[8:], endSeqNo)   // End seqno
+	binary.BigEndian.PutUint32(extrasBuf[16:], 1)         // Snapshot type
 
 	// Snapshot Marker
 	writePacketToSource(source, &memd.Packet{
@@ -106,11 +176,11 @@ func sendSnapshotMarker(source mock.KvClient, start time.Time, vbucket uint16, o
 
 func sendMutation(source mock.KvClient, start time.Time, opaque uint32, doc *mockdb.Document) {
 	mutationExtrasBuf := make([]byte, 28)
-	binary.BigEndian.PutUint32(mutationExtrasBuf[0:], 0)  // by_seqno
-	binary.BigEndian.PutUint32(mutationExtrasBuf[8:], 0)  // rev seqno
-	binary.BigEndian.PutUint32(mutationExtrasBuf[16:], 0) // flags
-	binary.BigEndian.PutUint32(mutationExtrasBuf[20:], 0) // expiration
-	binary.BigEndian.PutUint32(mutationExtrasBuf[24:], 0) // lock time
+	binary.BigEndian.PutUint64(mutationExtrasBuf[0:], doc.SeqNo) // by_seqno
+	binary.BigEndian.PutUint64(mutationExtrasBuf[8:], 0)         // rev seqno
+	binary.BigEndian.PutUint32(mutationExtrasBuf[16:], 0)        // flags
+	binary.BigEndian.PutUint32(mutationExtrasBuf[20:], 0)        // expiration
+	binary.BigEndian.PutUint32(mutationExtrasBuf[24:], 0)        // lock time
 	// Metadata?
 
 	dataType := doc.Datatype
