@@ -343,9 +343,6 @@ func (x *kvImplCrud) handleAddRequest(source mock.KvClient, pak *memd.Packet, st
 }
 
 func (x *kvImplCrud) handleSetRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
-	fmt.Println(string(pak.Key))
-	fmt.Println(string(pak.Value))
-
 	if proc := x.makeProc(source, pak, mockauth.PermissionDataWrite, start); proc != nil {
 		if len(pak.Extras) != 8 {
 			x.writeStatusReply(source, pak, memd.StatusInvalidArgs, start)
