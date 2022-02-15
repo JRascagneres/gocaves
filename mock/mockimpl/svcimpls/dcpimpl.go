@@ -185,6 +185,10 @@ func sendMutation(source mock.KvClient, start time.Time, opaque uint32, doc *moc
 	dataType := doc.Datatype
 	var value []byte
 
+	if string(doc.Key) == "_sync:att:marked3" {
+		fmt.Println("xx")
+	}
+
 	if len(doc.Xattrs) > 0 {
 		var xattrValues []byte
 		for xattrK, xattrV := range doc.Xattrs {
