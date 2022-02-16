@@ -33,7 +33,6 @@ func (dcp *dcpImpl) handleOpenDCPConnection(source mock.KvClient, pak *memd.Pack
 func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
 	fmt.Println("DCP Stream Request")
 	vbucket := source.SelectedBucket().Store().GetVbucket(uint(pak.Vbucket))
-	docs, _, _ := getDocumentFromVBucket(source.SelectedBucket(), uint(pak.Vbucket))
 
 	flags := binary.BigEndian.Uint64(pak.Extras[0:])
 	startSeqNo := binary.BigEndian.Uint64(pak.Extras[8:])
@@ -59,10 +58,6 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 	if vbucket.CurrentMetaState(0).VbUUID != vbUUID && startSeqNo != 0 {
 		rollbackRequired = true
 		rollbackPoint = 0
-	}
-
-	if rollbackRequired {
-		fmt.Println("Rollback required")
 	}
 
 	if rollbackRequired {
@@ -97,6 +92,7 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 	}
 
 	if startSeqNo != endSeqNo {
+		docs, _ := getDocumentFromVBucket(source.SelectedBucket(), uint(pak.Vbucket), startSeqNo, endSeqNo)
 		sendSnapshotMarker(source, start, pak.Vbucket, pak.Opaque, startSeqNo, endSeqNo)
 		for _, doc := range docs {
 			if doc.SeqNo < startSeqNo {
@@ -112,16 +108,30 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 	sendEndStream(source, start, pak.Vbucket, pak.Opaque)
 }
 
-func getDocumentFromVBucket(bucket mock.Bucket, vbIdx uint) ([]*mockdb.Document, uint16, error) {
+func getDocumentFromVBucket(bucket mock.Bucket, vbIdx uint, startSeqNo, endSeqNo uint64) ([]*mockdb.Document, error) {
 	vBucket := bucket.Store().GetVbucket(vbIdx)
-	vbDocs, err := vBucket.GetAll(0, 0)
+	vbDocs, _, err := vBucket.GetAllWithin(0, startSeqNo, endSeqNo)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	highSeqNo := vBucket.GetHighSeqNo()
+	seen := make(map[string]struct{})
+	docs := make([]*mockdb.Document, 0)
+	for i := len(vbDocs) - 1; i >= 0; i-- {
+		_, ok := seen[string(vbDocs[i].Key)]
+		if !ok {
+			docs = append(docs, vbDocs[i])
+			seen[string(vbDocs[i].Key)] = struct{}{}
+		}
+	}
 
-	return vbDocs, uint16(highSeqNo), nil
+	// DCP requires ordered docs so flip the above... again?
+	flipped := make([]*mockdb.Document, len(docs))
+	for idx, doc := range docs {
+		flipped[len(docs)-idx-1] = doc
+	}
+
+	return flipped, nil
 }
 
 func (dcp *dcpImpl) handleDCPControl(source mock.KvClient, pak *memd.Packet, start time.Time) {
@@ -184,10 +194,6 @@ func sendMutation(source mock.KvClient, start time.Time, opaque uint32, doc *moc
 
 	dataType := doc.Datatype
 	var value []byte
-
-	if string(doc.Key) == "_sync:att:marked3" {
-		fmt.Println("xx")
-	}
 
 	if len(doc.Xattrs) > 0 {
 		var xattrValues []byte
