@@ -294,7 +294,7 @@ func (c *clusterInst) handleKvPacketIn(source *kvClient, pak *memd.Packet) {
 }
 
 func (c *clusterInst) handleKvPacketOut(source *kvClient, pak *memd.Packet) bool {
-	// log.Printf("sending kv packet %p CMD:%s %+v", source, pak.Command.Name(), pak)
+	log.Printf("sending kv packet %p CMD:%s %+v", source, pak.Command.Name(), pak)
 	if !c.kvOutHooks.Invoke(source, pak) {
 		log.Printf("throwing away kv packet %p CMD:%s", source, pak.Command.Name())
 		return false
