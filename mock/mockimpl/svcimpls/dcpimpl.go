@@ -2,7 +2,7 @@ package svcimpls
 
 import (
 	"encoding/binary"
-	"fmt"
+	"log"
 	"time"
 
 	"github.com/couchbase/gocbcore/v9/memd"
@@ -10,8 +10,7 @@ import (
 	"github.com/couchbaselabs/gocaves/mock/mockdb"
 )
 
-type dcpImpl struct {
-}
+type dcpImpl struct{}
 
 func (dcp *dcpImpl) Register(h *hookHelper) {
 	h.RegisterKvHandler(memd.CmdDcpOpenConnection, dcp.handleOpenDCPConnection)
@@ -21,7 +20,7 @@ func (dcp *dcpImpl) Register(h *hookHelper) {
 }
 
 func (dcp *dcpImpl) handleOpenDCPConnection(source mock.KvClient, pak *memd.Packet, start time.Time) {
-	fmt.Println("DCP Open Connection")
+	log.Printf("DCP Open Connection command")
 	writePacketToSource(source, &memd.Packet{
 		Magic:   memd.CmdMagicRes,
 		Command: memd.CmdDcpOpenConnection,
@@ -31,7 +30,7 @@ func (dcp *dcpImpl) handleOpenDCPConnection(source mock.KvClient, pak *memd.Pack
 }
 
 func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
-	fmt.Println("DCP Stream Request")
+	log.Printf("DCP Stream Request")
 	vbucket := source.SelectedBucket().Store().GetVbucket(uint(pak.Vbucket))
 
 	flags := binary.BigEndian.Uint64(pak.Extras[0:])
@@ -135,7 +134,7 @@ func getDocumentFromVBucket(bucket mock.Bucket, vbIdx uint, startSeqNo, endSeqNo
 }
 
 func (dcp *dcpImpl) handleDCPControl(source mock.KvClient, pak *memd.Packet, start time.Time) {
-	fmt.Println("DCP Control Request")
+	log.Printf("DCP Control Request")
 	writePacketToSource(source, &memd.Packet{
 		Magic:   memd.CmdMagicRes,
 		Command: memd.CmdDcpControl,
