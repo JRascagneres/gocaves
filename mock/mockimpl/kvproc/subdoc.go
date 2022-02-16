@@ -213,10 +213,6 @@ func (e *Engine) executeSdOps(doc, newMeta *mockdb.Document, ops []*SubDocOp, co
 				// We created a fake document for the xattr so we need to strip it down to only the value.
 				v := opDoc.Value[len(fmt.Sprintf("{\"%s\":", key)):]
 				v = v[:len(v)-1] // }
-				if string(doc.Key) == "_sync:att:marked3" {
-					fmt.Println("xx")
-				}
-
 				doc.Xattrs[key] = v
 			}
 		}

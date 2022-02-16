@@ -159,8 +159,6 @@ func (x *kvImplCrud) handleGetRequest(source mock.KvClient, pak *memd.Packet, st
 			return
 		}
 
-		fmt.Println(string(pak.Key))
-
 		extrasBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(extrasBuf[0:], resp.Flags)
 
@@ -878,8 +876,6 @@ func (x *kvImplCrud) handleMultiLookupRequest(source mock.KvClient, pak *memd.Pa
 			}
 		}
 
-		fmt.Println("HEY")
-
 		status := memd.StatusSuccess
 		if resp.IsDeleted {
 			status = memd.StatusSubDocSuccessDeleted
@@ -904,8 +900,6 @@ func (x *kvImplCrud) handleMultiLookupRequest(source mock.KvClient, pak *memd.Pa
 }
 
 func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
-	fmt.Println(string(pak.Key))
-
 	if proc := x.makeProc(source, pak, mockauth.PermissionDataWrite, start); proc != nil {
 		var docFlags memd.SubdocDocFlag
 		var expiry uint32
@@ -954,9 +948,6 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 					IsXattrPath:  opFlags&memd.SubdocFlagXattrPath != 0,
 					ExpandMacros: opFlags&memd.SubdocFlagExpandMacros != 0,
 				})
-
-				fmt.Println(opCode)
-				fmt.Println(path)
 
 				byteIdx += 8 + pathLen + valueLen - 1
 
