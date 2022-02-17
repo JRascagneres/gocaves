@@ -1,10 +1,10 @@
 package helpers
 
 import (
+	"time"
+
 	"github.com/couchbase/gocbcore/v9/memd"
 	"github.com/couchbaselabs/gocaves/mock"
-	"log"
-	"time"
 )
 
 func CreateErrorMapHook(status memd.StatusCode, errMap []byte) mock.KvHookFunc {
@@ -32,6 +32,6 @@ func WritePacketToSource(source mock.KvClient, pak *memd.Packet, start time.Time
 	}
 	err := source.WritePacket(pak)
 	if err != nil {
-		log.Printf("failed to write packet %+v to %+v", pak, source)
+		// log.Printf("failed to write packet %+v to %+v", pak, source)
 	}
 }

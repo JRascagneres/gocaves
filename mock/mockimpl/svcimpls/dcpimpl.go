@@ -2,6 +2,7 @@ package svcimpls
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"time"
 
@@ -29,13 +30,46 @@ func (dcp *dcpImpl) handleOpenDCPConnection(source mock.KvClient, pak *memd.Pack
 	}, start)
 }
 
+// requireRollback calculates whether a rollback is required when a DCP feed is starting
+// https://github.com/couchbase/kv_engine/blob/master/docs/dcp/documentation/rollback.md
+func requireRollback(startSeqNo, consumerVBUUID, producerVBUUID uint64) (rollbackRequired bool, rollbacKPoint uint64) {
+
+	return false, 0
+
+	// 1.a. --> Consumer has no history so no rollback required
+	if startSeqNo == 0 && consumerVBUUID == 0 {
+		rollbackRequired = false
+		return
+	}
+
+	// 1.b. Consumer has history at seqNo 0
+	// If so rollback required but run 3/4 to determine how far back
+	if startSeqNo == 0 && consumerVBUUID != 0 {
+		rollbackRequired = true
+	}
+
+	// 3. Diverging history rollback to 0
+	if consumerVBUUID != producerVBUUID {
+		rollbackRequired = true
+		rollbacKPoint = 0
+		return
+	}
+
+	// 4. - Currently not supported
+	return
+}
+
 func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
 	log.Printf("DCP Stream Request")
 	vbucket := source.SelectedBucket().Store().GetVbucket(uint(pak.Vbucket))
 
+	if pak.Vbucket == 0 {
+		fmt.Println("x")
+	}
+
 	flags := binary.BigEndian.Uint64(pak.Extras[0:])
-	startSeqNo := binary.BigEndian.Uint64(pak.Extras[8:])
-	endSeqNo := binary.BigEndian.Uint64(pak.Extras[16:])
+	// startSeqNo := binary.BigEndian.Uint64(pak.Extras[8:])
+	// endSeqNo := binary.BigEndian.Uint64(pak.Extras[16:])
 	vbUUID := binary.BigEndian.Uint64(pak.Extras[24:])
 	snapshotStartSeqNo := binary.BigEndian.Uint64(pak.Extras[32:])
 	snapshotEndSeqNo := binary.BigEndian.Uint64(pak.Extras[40:])
@@ -44,20 +78,7 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 	_ = snapshotStartSeqNo
 	_ = snapshotEndSeqNo
 
-	// Decide on whether we should rollback
-	rollbackRequired := false
-	rollbackPoint := uint64(0)
-	if startSeqNo == 0 && vbUUID != 0 {
-		if vbucket.CurrentMetaState(0).VbUUID != vbUUID {
-			rollbackRequired = true
-			rollbackPoint = 0
-		}
-	}
-
-	if vbucket.CurrentMetaState(0).VbUUID != vbUUID && startSeqNo != 0 {
-		rollbackRequired = true
-		rollbackPoint = 0
-	}
+	rollbackRequired, rollbackPoint := requireRollback(startSeqNo, vbUUID, vbucket.CurrentMetaState(0).VbUUID)
 
 	if rollbackRequired {
 		streamReqValue := make([]byte, 8)
@@ -86,9 +107,9 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 
 	// If the start sequence is not at the end of the previously sent snapshot then the snapshot failed to send
 	// completely. Therefore, we need to re-send this snapshot.
-	if startSeqNo != snapshotEndSeqNo {
-		startSeqNo = snapshotStartSeqNo
-	}
+	// if startSeqNo != snapshotEndSeqNo {
+	// 	startSeqNo = snapshotStartSeqNo
+	// }
 
 	if startSeqNo != endSeqNo {
 		docs, _ := getDocumentFromVBucket(source.SelectedBucket(), uint(pak.Vbucket), startSeqNo, endSeqNo)
