@@ -14,10 +14,10 @@ func NewDefaultCluster() (mock.Cluster, error) {
 		return nil, err
 	}
 
-	_, err = cluster.AddNode(mock.NewNodeOptions{})
-	if err != nil {
-		return nil, err
-	}
+	// _, err = cluster.AddNode(mock.NewNodeOptions{})
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	_, err = cluster.AddBucket(mock.NewBucketOptions{
 		Name:        "default",
