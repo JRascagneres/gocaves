@@ -56,11 +56,12 @@ type ExecuteResults struct {
 }
 
 type indexInputMeta struct {
-	ID         string `json:"id"`
-	Rev        uint64 `json:"rev"`
-	Type       uint8  `json:"type"`
-	Flags      uint32 `json:"flags"`
-	Expiration int    `json:"expiration"`
+	ID         string                 `json:"id"`
+	Rev        uint64                 `json:"rev"`
+	Type       uint8                  `json:"type"`
+	Flags      uint32                 `json:"flags"`
+	Expiration int                    `json:"expiration"`
+	Xattrs     map[string]interface{} `json:"xattrs"`
 }
 
 type outputItem struct {
@@ -361,12 +362,25 @@ func (e *Engine) index(index *Index, docs []*mockdb.Document) ([]indexedItem, er
 			continue
 		}
 
+		docXattrs := make(map[string]interface{})
+		for xattrKey, xattrVal := range doc.Xattrs {
+			var xattrValMarshal map[string]interface{}
+			err := json.Unmarshal(xattrVal, &xattrValMarshal)
+			if err != nil {
+				// TODO: should probably have some error handling
+				continue
+			}
+
+			docXattrs[xattrKey] = xattrValMarshal
+		}
+
 		meta := indexInputMeta{
 			ID:         string(doc.Key),
 			Rev:        0,
 			Type:       doc.Datatype,
 			Flags:      doc.Flags,
 			Expiration: doc.Expiry.Second(),
+			Xattrs:     docXattrs,
 		}
 
 		_, err = fn(goja.Undefined(), vm.ToValue(docValue), vm.ToValue(meta))

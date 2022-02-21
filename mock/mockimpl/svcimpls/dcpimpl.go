@@ -138,6 +138,9 @@ end:
 
 func getDocumentFromVBucket(bucket mock.Bucket, vbIdx uint, startSeqNo, endSeqNo uint64) ([]*mockdb.Document, uint64, error) {
 	vBucket := bucket.Store().GetVbucket(vbIdx)
+	highSeqNo := vBucket.GetHighSeqNo()
+
+	endSeqNo = minUint64(highSeqNo, endSeqNo)
 	vbDocs, _, err := vBucket.GetAllWithin(0, startSeqNo, endSeqNo)
 	if err != nil {
 		return nil, 0, err
@@ -159,7 +162,7 @@ func getDocumentFromVBucket(bucket mock.Bucket, vbIdx uint, startSeqNo, endSeqNo
 		flipped[len(docs)-idx-1] = doc
 	}
 
-	return flipped, vBucket.GetHighSeqNo(), nil
+	return flipped, highSeqNo, nil
 }
 
 func (dcp *dcpImpl) handleDCPControl(source mock.KvClient, pak *memd.Packet, start time.Time) {
