@@ -3,6 +3,7 @@ package mockmr
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -172,16 +173,24 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 			}
 		}
 
+		docKeyConverted, _ := NewKeysFilter([]byte(doc.Key))
+		startKeyFilter, _ := NewKeysFilter([]byte(opts.StartKey))
+		endKeyFilter, _ := NewKeysFilter([]byte(opts.EndKey))
+
 		if inclusiveStart {
-			if opts.StartKey != "" && doc.Key < opts.StartKey {
-				continue
+			if opts.StartKey != "" {
+				if comparison, _ := docKeyConverted.lessThan(startKeyFilter); comparison {
+					continue
+				}
 			}
 			if opts.StartKeyDocID != "" && doc.ID < opts.StartKeyDocID {
 				continue
 			}
 		} else {
-			if opts.StartKey != "" && doc.Key >= opts.StartKey {
-				continue
+			if opts.StartKey != "" {
+				if comparison, _ := docKeyConverted.greaterThanEqualTo(startKeyFilter); comparison {
+					continue
+				}
 			}
 			if opts.StartKeyDocID != "" && doc.ID >= opts.StartKeyDocID {
 				continue
@@ -189,15 +198,19 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 		}
 
 		if opts.InclusiveEnd {
-			if opts.EndKey != "" && doc.Key > opts.EndKey {
-				continue
+			if opts.EndKey != "" {
+				if comparison, _ := docKeyConverted.greaterThan(endKeyFilter); comparison {
+					continue
+				}
 			}
 			if opts.EndKeyDocID != "" && doc.ID > opts.EndKeyDocID {
 				continue
 			}
 		} else {
-			if opts.EndKey != "" && doc.Key >= opts.EndKey {
-				continue
+			if opts.EndKey != "" {
+				if comparison, _ := docKeyConverted.greaterThanEqualTo(endKeyFilter); comparison {
+					continue
+				}
 			}
 			if opts.EndKeyDocID != "" && doc.ID >= opts.EndKeyDocID {
 				continue
@@ -246,7 +259,12 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 
 	output = output[opts.Skip:]
 	if opts.Limit > 0 && output != nil {
-		output = output[:opts.Limit]
+		limit := opts.Limit
+		if limit > len(output) {
+			limit = len(output)
+		}
+
+		output = output[:limit]
 	}
 
 	return indexSize, &ExecuteResults{Rows: output}, nil
@@ -442,4 +460,84 @@ func (e *Engine) GetAllDesignDocuments() []*DesignDocument {
 	}
 
 	return ddocs
+}
+
+type KeysFilter []interface{}
+
+func NewKeysFilter(data []byte) (KeysFilter, error) {
+	var keys interface{}
+	err := json.Unmarshal(data, &keys)
+	if err != nil {
+		return nil, err
+	}
+
+	var keysFilter KeysFilter
+	switch v := keys.(type) {
+	case []interface{}:
+		keysFilter = v
+	default:
+		keysFilter = []interface{}{v}
+	}
+
+	return keysFilter, nil
+}
+
+type IntComparator func(int, int) bool
+type StringComparator func(string, string) bool
+
+// Comparison - Note the input comparators should be 'flipped'
+func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator, stringComparator StringComparator) (bool, error) {
+	if len(keys) != len(keysIn) {
+		return false, fmt.Errorf("not equal slice length")
+	}
+	for i := 0; i < len(keys); i++ {
+		switch v := keys[i].(type) {
+		case int:
+			keysInAssert, ok := keysIn[i].(int)
+			if !ok {
+				return false, fmt.Errorf("didn't match type")
+			}
+
+			if intComparator(v, keysInAssert) {
+				return false, nil
+			}
+		case string:
+			keysInAssert, ok := keysIn[i].(string)
+			if !ok {
+				return false, fmt.Errorf("didn't match type")
+			}
+
+			if stringComparator(v, keysInAssert) {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+func (keys KeysFilter) lessThan(keysIn KeysFilter) (bool, error) {
+	return keys.Comparison(keysIn,
+		func(i int, i2 int) bool {
+			return i >= i2
+		}, func(s string, s2 string) bool {
+			return s >= s2
+		})
+}
+
+func (keys KeysFilter) greaterThan(keysIn KeysFilter) (bool, error) {
+	return keys.Comparison(keysIn,
+		func(i int, i2 int) bool {
+			return i <= i2
+		}, func(s string, s2 string) bool {
+			return s <= s2
+		})
+}
+
+func (keys KeysFilter) greaterThanEqualTo(keysIn KeysFilter) (bool, error) {
+	return keys.Comparison(keysIn,
+		func(i int, i2 int) bool {
+			return i < i2
+		}, func(s string, s2 string) bool {
+			return s < s2
+		})
 }
