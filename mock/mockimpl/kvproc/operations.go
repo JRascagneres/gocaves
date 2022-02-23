@@ -389,6 +389,12 @@ func (e *Engine) Delete(opts DeleteOptions) (*DeleteResult, error) {
 			idoc.IsDeleted = true
 			idoc.LockExpiry = time.Time{}
 			idoc.Cas = mockdb.GenerateNewCas(e.HLC())
+			idoc.Value = []byte{}
+			for key := range idoc.Xattrs {
+				if !strings.HasPrefix(key, "_") {
+					delete(idoc.Xattrs, key)
+				}
+			}
 			return idoc, nil
 		})
 	if err != nil {

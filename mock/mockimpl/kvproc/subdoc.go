@@ -80,15 +80,6 @@ func (e *Engine) executeSdOps(doc, newMeta *mockdb.Document, ops []*SubDocOp, co
 				}
 			}
 
-			// TODO JacquesRas: maybe move this to the executor bit
-			if !strings.HasPrefix(path, "_") && doc.IsDeleted {
-				opReses[reorderedOps.indexes[opIdx]] = &SubDocResult{
-					Value: nil,
-					Err:   ErrSdPathNotFound,
-				}
-				continue
-			}
-
 			opDoc, err = e.createXattrDoc(doc, newMeta, op)
 			if err != nil {
 				opReses[reorderedOps.indexes[opIdx]] = &SubDocResult{
