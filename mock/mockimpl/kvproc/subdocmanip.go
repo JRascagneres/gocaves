@@ -19,7 +19,7 @@ func newSubDocManip(data []byte) (*subDocManip, error) {
 	}
 
 	var val interface{}
-	err := json.Unmarshal(data, &val)
+	err := JsonUnmarshalLargeNumber(data, &val)
 	if err != nil {
 		return nil, err
 	}

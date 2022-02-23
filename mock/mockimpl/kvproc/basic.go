@@ -1,6 +1,8 @@
 package kvproc
 
 import (
+	"bytes"
+	"encoding/json"
 	"time"
 
 	"github.com/couchbaselabs/gocaves/mock/mockdb"
@@ -66,4 +68,10 @@ func (e *Engine) parseExpiry(expiry uint32) time.Time {
 
 func (e *Engine) HLC() time.Time {
 	return e.db.Chrono().Now()
+}
+
+func JsonUnmarshalLargeNumber(data []byte, v interface{}) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	return decoder.Decode(v)
 }

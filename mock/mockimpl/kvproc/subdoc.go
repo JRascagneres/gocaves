@@ -576,7 +576,7 @@ func doBasicMutation(doc []byte, op *SubDocOp, mutationFn func(pathVal *subDocMa
 	}
 
 	var valueObj interface{}
-	err = json.Unmarshal(op.Value, &valueObj)
+	err = JsonUnmarshalLargeNumber(op.Value, &valueObj)
 	if err != nil {
 		return nil, err
 	}
