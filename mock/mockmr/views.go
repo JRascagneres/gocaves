@@ -492,13 +492,17 @@ func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator
 	}
 	for i := 0; i < len(keys); i++ {
 		switch v := keys[i].(type) {
-		case int:
-			keysInAssert, ok := keysIn[i].(int)
+		case float64:
+			keysInAssert, ok := keysIn[i].(float64)
 			if !ok {
 				return false, fmt.Errorf("didn't match type")
 			}
 
-			if intComparator(v, keysInAssert) {
+			if i != len(keys)-1 && v == keysInAssert {
+				continue
+			}
+
+			if intComparator(int(v), int(keysInAssert)) {
 				return false, nil
 			}
 		case string:
@@ -507,9 +511,15 @@ func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator
 				return false, fmt.Errorf("didn't match type")
 			}
 
+			if i != len(keys)-1 && v == keysInAssert {
+				continue
+			}
+
 			if stringComparator(v, keysInAssert) {
 				return false, nil
 			}
+		default:
+			fmt.Printf("Unknown type? %T\n", keys[i])
 		}
 	}
 	return true, nil
@@ -521,6 +531,14 @@ func (keys KeysFilter) lessThan(keysIn KeysFilter) (bool, error) {
 			return i >= i2
 		}, func(s string, s2 string) bool {
 			return s >= s2
+		})
+}
+func (keys KeysFilter) lessThanEqualTo(keysIn KeysFilter) (bool, error) {
+	return keys.Comparison(keysIn,
+		func(i int, i2 int) bool {
+			return i > i2
+		}, func(s string, s2 string) bool {
+			return s > s2
 		})
 }
 
