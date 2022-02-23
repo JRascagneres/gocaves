@@ -56,20 +56,20 @@ func (b *Bucket) Chrono() *mocktime.Chrono {
 	return b.chrono
 }
 
-func (b *Bucket) GetAllLatest(includeDeleted bool) ([]*Document, error) {
+func (b *Bucket) GetAllLatest() ([]*Document, error) {
 	vbDocs, err := b.GetAll(0, 0)
 	if err != nil {
 		return nil, err
 	}
+
+	return vbDocs, nil
 
 	seen := make(map[string]struct{})
 	docs := make([]*Document, 0)
 	for i := len(vbDocs) - 1; i >= 0; i-- {
 		_, ok := seen[string(vbDocs[i].Key)]
 		if !ok {
-			if includeDeleted || !vbDocs[i].IsDeleted {
-				docs = append(docs, vbDocs[i])
-			}
+			docs = append(docs, vbDocs[i])
 			seen[string(vbDocs[i].Key)] = struct{}{}
 		}
 	}

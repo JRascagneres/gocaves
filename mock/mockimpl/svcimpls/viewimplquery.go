@@ -65,7 +65,7 @@ func (x *viewImplQuery) handleQuery(source mock.ViewService, req *mock.HTTPReque
 		}
 	}
 
-	docs, err := bucket.Store().GetAllLatest(false)
+	docs, err := bucket.Store().GetAllLatest()
 	if err != nil {
 		log.Printf("Failed to get view query docs: %v", err)
 		return &mock.HTTPResponse{

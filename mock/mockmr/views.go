@@ -188,11 +188,11 @@ func (e *Engine) Execute(opts ExecuteOptions) (int, *ExecuteResults, error) {
 			}
 		} else {
 			if opts.StartKey != "" {
-				if comparison, _ := docKeyConverted.greaterThanEqualTo(startKeyFilter); comparison {
+				if comparison, _ := docKeyConverted.lessThanEqualTo(startKeyFilter); comparison {
 					continue
 				}
 			}
-			if opts.StartKeyDocID != "" && doc.ID >= opts.StartKeyDocID {
+			if opts.StartKeyDocID != "" && doc.ID <= opts.StartKeyDocID {
 				continue
 			}
 		}
@@ -485,8 +485,8 @@ func NewKeysFilter(data []byte) (KeysFilter, error) {
 type IntComparator func(int, int) bool
 type StringComparator func(string, string) bool
 
-// Comparison - Note the input comparators should be 'flipped'
-func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator, stringComparator StringComparator) (bool, error) {
+// Comparison
+func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator, stringComparator StringComparator, equalityCheck bool) (bool, error) {
 	if len(keys) != len(keysIn) {
 		return false, fmt.Errorf("not equal slice length")
 	}
@@ -502,9 +502,15 @@ func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator
 				continue
 			}
 
-			if intComparator(int(v), int(keysInAssert)) {
-				return false, nil
+			if i == len(keys)-1 && v == keysInAssert && equalityCheck {
+				return true, nil
 			}
+
+			if intComparator(int(v), int(keysInAssert)) {
+				return true, nil
+			}
+			return false, nil
+
 		case string:
 			keysInAssert, ok := keysIn[i].(string)
 			if !ok {
@@ -515,47 +521,52 @@ func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator
 				continue
 			}
 
-			if stringComparator(v, keysInAssert) {
-				return false, nil
+			if i == len(keys)-1 && v == keysInAssert && equalityCheck {
+				return true, nil
 			}
+
+			if stringComparator(v, keysInAssert) {
+				return true, nil
+			}
+			return false, nil
 		default:
 			fmt.Printf("Unknown type? %T\n", keys[i])
 		}
 	}
-	return true, nil
+	return false, nil
 }
 
 func (keys KeysFilter) lessThan(keysIn KeysFilter) (bool, error) {
 	return keys.Comparison(keysIn,
 		func(i int, i2 int) bool {
-			return i >= i2
+			return i < i2
 		}, func(s string, s2 string) bool {
-			return s >= s2
-		})
+			return s < s2
+		}, false)
 }
 func (keys KeysFilter) lessThanEqualTo(keysIn KeysFilter) (bool, error) {
-	return keys.Comparison(keysIn,
-		func(i int, i2 int) bool {
-			return i > i2
-		}, func(s string, s2 string) bool {
-			return s > s2
-		})
-}
-
-func (keys KeysFilter) greaterThan(keysIn KeysFilter) (bool, error) {
-	return keys.Comparison(keysIn,
-		func(i int, i2 int) bool {
-			return i <= i2
-		}, func(s string, s2 string) bool {
-			return s <= s2
-		})
-}
-
-func (keys KeysFilter) greaterThanEqualTo(keysIn KeysFilter) (bool, error) {
 	return keys.Comparison(keysIn,
 		func(i int, i2 int) bool {
 			return i < i2
 		}, func(s string, s2 string) bool {
 			return s < s2
-		})
+		}, true)
+}
+
+func (keys KeysFilter) greaterThan(keysIn KeysFilter) (bool, error) {
+	return keys.Comparison(keysIn,
+		func(i int, i2 int) bool {
+			return i > i2
+		}, func(s string, s2 string) bool {
+			return s > s2
+		}, false)
+}
+
+func (keys KeysFilter) greaterThanEqualTo(keysIn KeysFilter) (bool, error) {
+	return keys.Comparison(keysIn,
+		func(i int, i2 int) bool {
+			return i > i2
+		}, func(s string, s2 string) bool {
+			return s > s2
+		}, true)
 }
