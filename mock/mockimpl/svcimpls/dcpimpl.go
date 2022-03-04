@@ -57,10 +57,10 @@ func requireRollback(startSeqNo, consumerVBUUID, producerVBUUID uint64) (rollbac
 }
 
 func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, start time.Time) {
-	log.Printf("DCP Stream Request")
+	// log.Printf("DCP Stream Request")
 	vbucket := source.SelectedBucket().Store().GetVbucket(uint(pak.Vbucket))
 
-	if pak.Vbucket == 0 {
+	if pak.Vbucket == 59 {
 		fmt.Println("x")
 	}
 
@@ -121,15 +121,17 @@ func (dcp *dcpImpl) handleStreamRequest(source mock.KvClient, pak *memd.Packet, 
 		if endSeqNo == 0 {
 			goto end
 		}
+
+		if len(docs) > 1 {
+			fmt.Println("")
+		}
+
 		sendSnapshotMarker(source, start, pak.Vbucket, pak.Opaque, startSeqNo, endSeqNo)
 		for _, doc := range docs {
-			if doc.SeqNo < startSeqNo {
-				break
+			if string(doc.Key) == "TestImportDecimalScale0" {
+				fmt.Println("x")
 			}
-			if doc.SeqNo > endSeqNo {
-				break
-			}
-			sendMutation(source, start, pak.Opaque, doc)
+			sendData(source, start, pak.Opaque, doc)
 		}
 	}
 end:
@@ -214,6 +216,44 @@ func sendSnapshotMarker(source mock.KvClient, start time.Time, vbucket uint16, o
 	}, start)
 }
 
+func sendData(source mock.KvClient, start time.Time, opaque uint32, doc *mockdb.Document) {
+	if doc.IsDeleted {
+		sendDeletion(source, start, opaque, doc)
+	} else {
+		sendMutation(source, start, opaque, doc)
+	}
+}
+
+func sendDeletion(source mock.KvClient, start time.Time, opaque uint32, doc *mockdb.Document) {
+	mutationExtrasBuf := make([]byte, 18)
+	binary.BigEndian.PutUint64(mutationExtrasBuf[0:], doc.SeqNo) // by_seqno
+	binary.BigEndian.PutUint64(mutationExtrasBuf[8:], 0)         // rev seqno
+	binary.BigEndian.PutUint16(mutationExtrasBuf[16:], 0)
+	// 16-18 Extended metadata
+
+	dataType := uint8(0)
+	var value []byte
+
+	if len(doc.Xattrs) > 0 {
+		_, value = encodeDocForDCP(doc, true)
+		dataType = 0x04
+	}
+
+	writePacketToSource(source, &memd.Packet{
+		Magic:    memd.CmdMagicReq,
+		Command:  memd.CmdDcpDeletion,
+		Datatype: dataType,
+		Vbucket:  uint16(doc.VbID),
+		Key:      doc.Key,
+		Value:    value,
+		Extras:   mutationExtrasBuf,
+		Status:   memd.StatusSuccess,
+		Opaque:   opaque,
+		Cas:      doc.Cas,
+	}, start)
+
+}
+
 func sendMutation(source mock.KvClient, start time.Time, opaque uint32, doc *mockdb.Document) {
 	mutationExtrasBuf := make([]byte, 28)
 	binary.BigEndian.PutUint64(mutationExtrasBuf[0:], doc.SeqNo) // by_seqno
@@ -223,35 +263,7 @@ func sendMutation(source mock.KvClient, start time.Time, opaque uint32, doc *moc
 	binary.BigEndian.PutUint32(mutationExtrasBuf[24:], 0)        // lock time
 	// Metadata?
 
-	dataType := doc.Datatype
-	var value []byte
-
-	if len(doc.Xattrs) > 0 {
-		var xattrValues []byte
-		for xattrK, xattrV := range doc.Xattrs {
-			xattrChunk := []byte(xattrK)
-			xattrChunk = append(xattrChunk, byte(0))
-			xattrChunk = append(xattrChunk, xattrV...)
-			xattrChunk = append(xattrChunk, byte(0))
-
-			xattrChunkLen := make([]byte, 4)
-			binary.BigEndian.PutUint32(xattrChunkLen[0:], uint32(len(xattrChunk)))
-			xattrChunk = append(xattrChunkLen, xattrChunk...)
-
-			xattrValues = append(xattrValues, xattrChunk...)
-		}
-
-		xattrsLen := len(xattrValues)
-
-		value = make([]byte, 4)
-		binary.BigEndian.PutUint32(value[0:], uint32(xattrsLen))
-		value = append(value, xattrValues...)
-		value = append(value, doc.Value...)
-
-		dataType = dataType | uint8(memd.DatatypeFlagXattrs)
-	} else {
-		value = doc.Value
-	}
+	dataType, value := encodeDocForDCP(doc, false)
 
 	// Send mutation
 	writePacketToSource(source, &memd.Packet{
@@ -264,8 +276,8 @@ func sendMutation(source mock.KvClient, start time.Time, opaque uint32, doc *moc
 		Extras:   mutationExtrasBuf,
 		Status:   memd.StatusSuccess,
 		Opaque:   opaque,
+		Cas:      doc.Cas,
 	}, start)
-
 }
 
 func sendEndStream(source mock.KvClient, start time.Time, vbucket uint16, opaque uint32) {
@@ -288,4 +300,40 @@ func minUint64(x, y uint64) uint64 {
 		return y
 	}
 	return x
+}
+
+// TODO: Cleanup the whole skipDocBody thing, eg, handle when no xattr
+func encodeDocForDCP(doc *mockdb.Document, skipDocBody bool) (dataType uint8, encodedVal []byte) {
+	dataType = doc.Datatype
+	if len(doc.Xattrs) > 0 {
+		var xattrValues []byte
+		for xattrK, xattrV := range doc.Xattrs {
+			xattrChunk := []byte(xattrK)
+			xattrChunk = append(xattrChunk, byte(0))
+			xattrChunk = append(xattrChunk, xattrV...)
+			xattrChunk = append(xattrChunk, byte(0))
+
+			xattrChunkLen := make([]byte, 4)
+			binary.BigEndian.PutUint32(xattrChunkLen[0:], uint32(len(xattrChunk)))
+			xattrChunk = append(xattrChunkLen, xattrChunk...)
+
+			xattrValues = append(xattrValues, xattrChunk...)
+		}
+
+		xattrsLen := len(xattrValues)
+
+		encodedVal = make([]byte, 4)
+		binary.BigEndian.PutUint32(encodedVal[0:], uint32(xattrsLen))
+		encodedVal = append(encodedVal, xattrValues...)
+
+		if !skipDocBody {
+			encodedVal = append(encodedVal, doc.Value...)
+		}
+
+		dataType = dataType | uint8(memd.DatatypeFlagXattrs)
+		return dataType, encodedVal
+	}
+
+	encodedVal = doc.Value
+	return dataType, encodedVal
 }

@@ -1,3 +1,5 @@
+facette.io/natsort v0.0.0-20181210072756-2cd4dd1e2dcb h1:1pSweJFeR3Pqx7uoelppkzeegfUBXL6I2FFAbfXw570=
+facette.io/natsort v0.0.0-20181210072756-2cd4dd1e2dcb/go.mod h1:npRYmtaITVom7rcSo+pRURltHSG2r4TQM1cdqJ2dUB0=
 github.com/couchbase/gocb/v2 v2.1.6 h1:SAmZ7UEW/nKW94spQ3/0s2p8MNYS0au63BlQq6yRYi8=
 github.com/couchbase/gocb/v2 v2.1.6/go.mod h1:dUnIOn6b/gFrRAvAoLgWnwWSvyTrhbT7gLnFegjkacI=
 github.com/couchbase/gocbcore/v9 v9.0.6 h1:aqLGIpoCfP0iFKO+ql2v4rfP9a5attKbLHN39mNuplA=

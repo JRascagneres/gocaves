@@ -3,6 +3,7 @@ module github.com/couchbaselabs/gocaves
 go 1.13
 
 require (
+	facette.io/natsort v0.0.0-20181210072756-2cd4dd1e2dcb
 	github.com/couchbase/gocb/v2 v2.1.6
 	github.com/couchbase/gocbcore/v9 v9.0.6
 	github.com/couchbaselabs/gocaves/client v0.0.0-20211201195517-a39ea9ff2037

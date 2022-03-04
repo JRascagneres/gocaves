@@ -14,7 +14,7 @@ function(key, values, rereduce) {
    }
 }
 `,
-	"sum": `
+	"_sum": `
 function(key, values, rereduce) {
   var sum = 0;
   for(i=0; i < values.length; i++) {

@@ -85,8 +85,12 @@ func (rc resultContainer) Len() int {
 	return len(rc.results)
 }
 
+// Less TODO: Improve this, probably push up a level so we can handle the errors
 func (rc resultContainer) Less(i, j int) bool {
-	return rc.results[i].Key < rc.results[j].Key
+	keyI, _ := NewKeysFilter([]byte(rc.results[i].Key))
+	keyJ, _ := NewKeysFilter([]byte(rc.results[j].Key))
+	less, _ := keyI.lessThan(keyJ)
+	return less
 }
 
 func (rc resultContainer) Swap(i, j int) {
@@ -482,11 +486,10 @@ func NewKeysFilter(data []byte) (KeysFilter, error) {
 	return keysFilter, nil
 }
 
-type IntComparator func(int, int) bool
+type FloatComparator func(float64, float64) bool
 type StringComparator func(string, string) bool
 
-// Comparison
-func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator, stringComparator StringComparator, equalityCheck bool) (bool, error) {
+func (keys KeysFilter) Comparison(keysIn KeysFilter, floatComparator FloatComparator, stringComparator StringComparator, equalityCheck bool) (bool, error) {
 	if len(keys) != len(keysIn) {
 		return false, fmt.Errorf("not equal slice length")
 	}
@@ -506,7 +509,7 @@ func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator
 				return true, nil
 			}
 
-			if intComparator(int(v), int(keysInAssert)) {
+			if floatComparator(v, keysInAssert) {
 				return true, nil
 			}
 			return false, nil
@@ -538,7 +541,7 @@ func (keys KeysFilter) Comparison(keysIn KeysFilter, intComparator IntComparator
 
 func (keys KeysFilter) lessThan(keysIn KeysFilter) (bool, error) {
 	return keys.Comparison(keysIn,
-		func(i int, i2 int) bool {
+		func(i float64, i2 float64) bool {
 			return i < i2
 		}, func(s string, s2 string) bool {
 			return s < s2
@@ -546,7 +549,7 @@ func (keys KeysFilter) lessThan(keysIn KeysFilter) (bool, error) {
 }
 func (keys KeysFilter) lessThanEqualTo(keysIn KeysFilter) (bool, error) {
 	return keys.Comparison(keysIn,
-		func(i int, i2 int) bool {
+		func(i float64, i2 float64) bool {
 			return i < i2
 		}, func(s string, s2 string) bool {
 			return s < s2
@@ -555,7 +558,7 @@ func (keys KeysFilter) lessThanEqualTo(keysIn KeysFilter) (bool, error) {
 
 func (keys KeysFilter) greaterThan(keysIn KeysFilter) (bool, error) {
 	return keys.Comparison(keysIn,
-		func(i int, i2 int) bool {
+		func(i float64, i2 float64) bool {
 			return i > i2
 		}, func(s string, s2 string) bool {
 			return s > s2
@@ -564,7 +567,7 @@ func (keys KeysFilter) greaterThan(keysIn KeysFilter) (bool, error) {
 
 func (keys KeysFilter) greaterThanEqualTo(keysIn KeysFilter) (bool, error) {
 	return keys.Comparison(keysIn,
-		func(i int, i2 int) bool {
+		func(i float64, i2 float64) bool {
 			return i > i2
 		}, func(s string, s2 string) bool {
 			return s > s2

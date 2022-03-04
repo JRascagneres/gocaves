@@ -305,11 +305,17 @@ func (x *kvImplCrud) handleAddRequest(source mock.KvClient, pak *memd.Packet, st
 		flags := binary.BigEndian.Uint32(pak.Extras[0:])
 		expiry := binary.BigEndian.Uint32(pak.Extras[4:])
 
+		if string(pak.Key) == "TestImportDecimalScale0" {
+			fmt.Println("x")
+		}
+
+		datatype := setDatatypeJSONFromValue(pak.Value)
+
 		resp, err := proc.Add(kvproc.StoreOptions{
 			Vbucket:      uint(pak.Vbucket),
 			CollectionID: uint(pak.CollectionID),
 			Key:          pak.Key,
-			Datatype:     pak.Datatype,
+			Datatype:     datatype,
 			Value:        pak.Value,
 			Flags:        flags,
 			Expiry:       expiry,

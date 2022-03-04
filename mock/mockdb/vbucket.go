@@ -130,13 +130,15 @@ func (s *Vbucket) findDocLocked(repIdx, collectionID uint, key []byte) *Document
 	repVisibleTime := s.chrono.Now().Add(-repLatency)
 
 	var foundDoc *Document
-	for _, doc := range s.documents {
+	var docIdx int
+	for i, doc := range s.documents {
 		if repIdx > 0 && !doc.ModifiedTime.Before(repVisibleTime) {
 			continue
 		}
 
 		if doc.CollectionID == collectionID && bytes.Equal(doc.Key, key) {
 			foundDoc = doc
+			docIdx = i
 		}
 	}
 
@@ -145,8 +147,15 @@ func (s *Vbucket) findDocLocked(repIdx, collectionID uint, key []byte) *Document
 		foundDoc = copyDocument(foundDoc)
 
 		// We cheat and convert an expired document directly to being deleted.
-		if s.hasDocExpired(foundDoc) {
+		if s.hasDocExpired(foundDoc) && !foundDoc.IsDeleted {
+			cas := GenerateNewCas(s.chrono.Now())
+			s.documents[docIdx].Cas = cas
+			s.documents[docIdx].IsDeleted = true
+			s.documents[docIdx].Expiry = s.chrono.Now()
+
 			foundDoc.IsDeleted = true
+			foundDoc.Cas = cas
+			foundDoc.Expiry = s.chrono.Now()
 		}
 
 		// We also cheat and clean this up here...
@@ -498,8 +507,15 @@ func (s *Vbucket) Flush() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	s.revData = []VbRevData{
+		{
+			VbUUID: generateNewVbUUID(),
+			SeqNo:  0,
+		},
+	}
 	s.documents = make([]*Document, 0)
 	s.maxSeqNo = 0
+
 }
 
 func (s *Vbucket) GetHighSeqNo() uint64 {

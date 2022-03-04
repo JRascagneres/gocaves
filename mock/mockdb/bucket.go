@@ -62,8 +62,6 @@ func (b *Bucket) GetAllLatest() ([]*Document, error) {
 		return nil, err
 	}
 
-	return vbDocs, nil
-
 	seen := make(map[string]struct{})
 	docs := make([]*Document, 0)
 	for i := len(vbDocs) - 1; i >= 0; i-- {
