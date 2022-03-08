@@ -155,7 +155,7 @@ func (s *Vbucket) findDocLocked(repIdx, collectionID uint, key []byte) *Document
 
 			foundDoc.IsDeleted = true
 			foundDoc.Cas = cas
-			foundDoc.Expiry = s.chrono.Now()
+			// foundDoc.Expiry = s.chrono.Now()
 		}
 
 		// We also cheat and clean this up here...

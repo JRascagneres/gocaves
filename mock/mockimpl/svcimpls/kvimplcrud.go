@@ -913,12 +913,16 @@ func (x *kvImplCrud) handleMultiMutateRequest(source mock.KvClient, pak *memd.Pa
 			if len(pak.Extras) == 1 {
 				docFlags = memd.SubdocDocFlag(pak.Extras[0])
 			} else {
-				if len(pak.Extras) != 5 {
+				if len(pak.Extras) < 4 {
 					x.writeStatusReply(source, pak, memd.StatusInvalidArgs, start)
 					return
 				}
+
 				expiry = binary.BigEndian.Uint32(pak.Extras[0:])
-				docFlags = memd.SubdocDocFlag(pak.Extras[4])
+
+				if len(pak.Extras) == 5 {
+					docFlags = memd.SubdocDocFlag(pak.Extras[4])
+				}
 			}
 		}
 
