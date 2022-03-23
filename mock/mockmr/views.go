@@ -285,6 +285,10 @@ func (e *Engine) normalizeKey(key interface{}, groupLevel int) interface{} {
 		return k[:groupLevel]
 	}
 
+	if groupLevel == 0 {
+		return nil
+	}
+
 	return key
 }
 
